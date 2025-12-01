@@ -18,6 +18,11 @@
             "AloisoGomes\\LaravelDbTenant\\": "src/"
         }
     },
+    "autoload-dev": {
+        "psr-4": {
+            "AloisoGomes\\LaravelDbTenant\\Tests\\": "tests/"
+        }
+    },
     "extra": {
         "laravel": {
             "providers": [

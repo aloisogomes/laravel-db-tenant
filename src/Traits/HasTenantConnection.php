@@ -7,36 +7,36 @@ use Illuminate\Support\Facades\Config;
 
 trait HasTenantConnection
 {
-    /**
-     * Alias estático para User::on($conn).
-     */
     public static function tenant(string $connectionName)
     {
         return static::on($connectionName);
     }
 
-    /**
-     * Inicializa a conexão baseada no contexto.
-     */
     public function initializeHasTenantConnection()
     {
-        // Se não houver tenant ativo, encerra.
+        // 1. Se não houver nenhum tenant ativo na pilha, não faz nada.
         if (!($currentTenant = Tenant::current())) {
             return;
         }
 
-        // Se a conexão já foi definida explicitamente (ex: via tenant()), respeita ela.
-        // Verificamos se a conexão atual é diferente da default para saber se foi alterada.
-        if ($this->getConnectionName() !== Config::get('database.default')) {
+        // 2. CORREÇÃO DO BUG:
+        // O Model padrão retorna NULL em getConnectionName().
+        // Precisamos verificar se a conexão foi alterada explicitamente para algo
+        // que NÃO seja null e NEM a default.
+        $currentConnection = $this->getConnectionName();
+        $defaultConnection = Config::get('database.default');
+
+        // Se a conexão já está definida (não é null) E é diferente da padrão,
+        // significa que o usuário forçou algo (ex: via propriedade na classe).
+        // Nesse caso, respeitamos e não sobrescrevemos.
+        if ($currentConnection !== null && $currentConnection !== $defaultConnection) {
              return;
         }
 
+        // 3. Aplica a conexão do Tenant Context
         $this->setConnection($currentTenant);
     }
 
-    /**
-     * Método auxiliar para descobrir de onde o objeto veio.
-     */
     public function getTenantConnectionName(): string
     {
         return $this->getConnectionName();
