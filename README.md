@@ -1,6 +1,6 @@
 # Laravel DB Tenant
 
-![GitHub Release](https://img.shields.io/github/v/release/inertiajs/inertia-laravel)
+![GitHub Release](https://img.shields.io/github/v/release/aloisogomes/laravel-db-tenant)
 
 **Laravel DB Tenant** is a lightweight, elegant package that allows you to switch database connections "on the fly" for specific blocks of code. Unlike global configuration changes, this package uses a **Context Stack**, allowing for nested connection switches while ensuring Eloquent models remain "sticky" to the connection they were created in.
 
