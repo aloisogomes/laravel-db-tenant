@@ -18,6 +18,23 @@ It is perfect for:
   * **Queue & Request Safety:** Automatically resets the connection stack after every HTTP request and Queue Job to prevent data leaks.
   * **Zero Config:** Works out of the box with standard Laravel database configurations.
 
+# Before you start..
+
+This package assumes that your connections are to separate databases, but with the same table structure, precisely to take advantage of the rules defined in your models and business logic. Think, for example, of a store platform, where each store has its own database and works separately on different servers, etc... But you want to give an accountant a single platform where he can obtain data from each of the stores in just one place.
+ 
+
+## This package is not for you if you expect:
+
+* Create complex relationships between tables from different databases (joins, unions, views, etc.);
+* Harmonize data from different tables;
+* Alert, handle or ensure data consistency involving distinct connections;
+* Manage transactions and locks in operations involving objects from different databases*;
+* Create replications, mirroring, or backups**
+
+**You can create a script that orchestrates an operation flow ensuring the order and criteria for separate transactions, but it is not the responsibility of this package to manage that flow.*
+
+***You may create a listener in your application to manage events in your models and use this package to update another database, but handling failures or ensuring consistency is out of the scope of this project. The responsibility for these flows remains with the developer who desires this behavior.*
+
 ## Installation
 
 You can install the package via composer:
@@ -27,6 +44,44 @@ composer require aloisogomes/laravel-db-tenant
 ```
 
 ## Setup
+
+Configure your known connections in `config/database.php` at `connections` list:
+
+```php
+use Illuminate\Support\Str;
+
+return [
+  'default' => env('DB_CONNECTION', 'default'),
+  // the main key of each connection will be available to our Tenant context
+  'connections' => [
+    'default' => [
+        'driver' => 'sqlite',
+        'url' => env('DB_URL'),
+        'database' => env('DB_DATABASE', database_path('database.sqlite')),
+        'prefix' => '',
+        'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
+        'busy_timeout' => null,
+        'journal_mode' => null,
+        'synchronous' => null,
+    ],
+    'legacy' => [
+        'driver' => 'sqlite',
+        'url' => env('DB_URL_LEGACY'),
+        'database' => env('DB_DATABASE_LEGACY', database_path('database_legacy.sqlite')),
+        'prefix' => '',
+        'foreign_key_constraints' => env('DB_FOREIGN_KEYS_LEGACY', true),
+        'busy_timeout' => null,
+        'journal_mode' => null,
+        'synchronous' => null,
+    ],
+    /******
+     * 'other_conn' => [...],
+     * ...
+     * ****/
+  ],
+  // Others configs...
+];
+```
 
 Add the `HasTenantConnection` trait to any Eloquent Model you want to be tenant-aware.
 
@@ -56,14 +111,14 @@ Use the `Tenant` facade to define the context. Any model retrieved inside the bl
 use AloisoGomes\LaravelDbTenant\Facades\Tenant;
 use App\Models\User;
 
-// 1. Default Context (uses default connection from .env)
-$localUser = User::find(1); 
+// 1. Default Context (uses default connection from .env), in our example connection named as 'default'
+$defaultUser = User::find(1); 
 
-// 2. Switch to 'tenant_db' connection
-Tenant::start('tenant_db');
+// 2. Switch to 'legacy' connection
+Tenant::start('legacy');
 
-$remoteUser = User::find(1); 
-// This query runs on 'tenant_db'
+$legacyUser = User::find(1); 
+// This query runs on 'lagacy'
 
 // 3. End context (returns to previous state)
 Tenant::end();
@@ -74,16 +129,16 @@ Tenant::end();
 Models created within a tenant context retain their connection reference forever. You can manipulate and save them safely outside the tenant block.
 
 ```php
-Tenant::start('archive_db');
-$archivedUser = User::find(500);
+Tenant::start('legacy');
+$legacyUser = User::find(500);
 Tenant::end();
 
 // We are back to the default connection here
-$localUser = User::find(1);
+$defaultUser = User::find(1);
 
 // UPDATE TEST:
-$localUser->update(['name' => 'Local']); // Updates default DB
-$archivedUser->update(['name' => 'Archived']); // Updates 'archive_db' automatically!
+$defaultUser->update(['name' => 'Local']); // Updates default DB
+$legacyUser->update(['name' => 'Legacy']); // Updates 'legacy' automatically!
 ```
 
 ### 3\. Nested Contexts (Stacking)
@@ -92,20 +147,20 @@ The package manages a LIFO (Last In, First Out) stack.
 
 ```php
 // Stack: [] (Default)
-Tenant::start('client_A');
+Tenant::start('legacy');
 
-    // Stack: ['client_A']
-    $userA = User::first(); 
+    // Stack: ['legacy']
+    $legacyUser = User::first(); 
 
-    Tenant::start('client_B');
+    Tenant::start('other_conn');
     
-        // Stack: ['client_A', 'client_B']
-        $userB = User::first();
+        // Stack: ['legacy', 'other_conn']
+        $otherConnUser = User::first();
         
     Tenant::end();
     
-    // Stack: ['client_A'] (Back to Client A)
-    $anotherUserA = User::first();
+    // Stack: ['legacy'] (Back to Legacy)
+    $anotherLegacyUser = User::find(500);
 
 Tenant::end();
 // Stack: [] (Back to Default)
@@ -116,10 +171,10 @@ Tenant::end();
 If you need to force a specific connection regardless of the current context, use the `tenant()` static method (alias for `on`):
 
 ```php
-Tenant::start('client_A');
+Tenant::start('legacy');
 
-// Forces 'mysql' connection even inside the 'client_A' block
-$admin = User::tenant('mysql')->find(1);
+// Forces 'default' connection even inside the 'lagacy' block
+$admin = User::tenant('default')->find(1);
 ```
 
 ### 5\. Transactions
@@ -127,15 +182,15 @@ $admin = User::tenant('mysql')->find(1);
 To safely run transactions within the current active context (whether it is the default or a tenant), use the `transaction` helper:
 
 ```php
-Tenant::start('client_A');
+Tenant::start('legacy');
 
 Tenant::transaction(function () {
-    // This transaction starts specifically on 'client_A' connection
+    // This transaction starts specifically on 'legacy' connection
     $user = User::find(1);
     $user->balance -= 100;
     $user->save();
     
-    // If this fails, only 'client_A' is rolled back
+    // If this fails, only 'legacy' is rolled back
 });
 
 Tenant::end();
