@@ -3,6 +3,14 @@
     "description": "Library to help you have multiple connections to the database while keeping the context clean without changing anything in the structure of your tables",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "laravel",
+        "database",
+        "tenant",
+        "multi-tenant",
+        "multi-database",
+        "multi-connection"
+    ],
     "authors": [
         {
             "name": "Aloiso Gomes",
